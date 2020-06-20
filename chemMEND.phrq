@@ -1,0 +1,252 @@
+DATABASE ../database/redox.dat
+
+TITLE Carbon decomposition in MEND
+
+CALCULATE_VALUES
+ fpH
+ -start
+ 10 pH = -la("H+")
+ 20 fpH = 10^(-0.2235*pH*pH + 2.7727*pH - 8.6)
+ 30 SAVE fpH
+ -end
+
+SOLUTION 1
+  units       mmol/kgw
+  temperature 	 25
+  pH 	 6.5
+  Acetate 	       4.38
+  Glucose 	       0.54
+  Ferrous 	      24.00
+
+  C(4)        1.0 redoxCO2(g) -3.4  # in equilibrium with CO2 in atmosphere, 400 pm
+  Ca          1.0
+  Na          1.0
+  Cl          1.0 charge
+  Hzero       1.0e-10
+  Nzero       1.0 redoxN2(g) 0.0
+  Ferric      1e-20 redoxFe(OH)3(a) 0.0
+  Methane     1.0e-10
+  Amm         1.0e-3
+  SAVE SOLUTION 1
+END
+
+
+GAS_PHASE 1 fixed volume gas phase
+  -fixed_volume
+  -volume 	   0.059000
+  temperature 	 8.0
+
+  redoxCH4(g) 0.0
+  redoxCO2(g) 0.0
+  redoxH2(g)  0.0
+  redoxN2(g)  1.0
+  redoxNH3(g) 0.0
+  SAVE GAS_PHASE 1
+END
+ 
+USE SOLUTION 1
+USE GAS_PHASE 1
+ 
+EQUILIBRIUM_PHASES 1
+  redoxFe(OH)3(a) 0.0 5.67059990E-03
+SURFACE 1
+Hfo_w redoxFe(OH)3(a) 0.2 1.068E4
+Hfo_s redoxFe(OH)3(a) 0.005 1.068E4
+  H_a   6.643E-04  3.417E+04      0.936
+  H_b   6.643E-04; H_c   6.643E-04; H_d  6.643E-04
+  H_e   3.321E-04; H_f   3.321E-04; H_g  3.321E-04; H_h  3.321E-04
+  H_ab  1.104E-04; H_ad  1.104E-04; H_af  1.104E-04; H_ah  1.104E-04
+  H_bc  1.104E-04; H_be  1.104E-04; H_bg  1.104E-04; H_cd  1.104E-04
+  H_cf  1.104E-04; H_ch  1.104E-04; H_de  1.104E-04; H_dg  1.104E-04
+  -equil 1
+
+
+KINETICS  Decomposition
+-cvode
+POM1
+   -m0   4
+   -formula CH2O 0.0
+   -parms 0.47 5e-4 2.8e-4 0.26  2.5  50  4e-5 0.5   #vp1, kp1, Ip1, gD-fraction of dead BA to D
+POM2
+   -m0   2
+   -formula CH2O 0.0
+   -parms  2.5   5  8e-5     #vp1, kp1, Ip1,
+MOM
+   -m0   10
+   -formula CH2O 0.0
+   -parms 0.1  250  0.5   #vm, km, fD- fraction of decomposed p1/p2 to D
+
+BA
+   -m0   0.2
+   -formula CH2O 0.0
+   -parms 0.47 5e-4 0.26 2.8e-4 0.01   #parm(1)=Ec, parm(2)=Vd, parm(3)=Kd parm(4)=mr, parm(5)=PEP, parm(6)=PEM
+DOM
+   -m0   0.5
+   -formula CH2O 0.0
+   -parms  8e-5 0.5  0.5   #Vd, mr, Ec,Kd, Id
+QOM
+   -m0   0.3
+   -formula CH2O 0.0
+   -parms 0.006 1.7  0.001   #adsorption constant, Qmax, desorption constant
+EP1
+   -m0   0.00001
+   -formula CH2O 0.0
+   -parms  0.01 2.8e-4 1e-3 #parm(1)=pep, parm(2)=mr, parm(3)=rEP
+
+EP2
+   -m0   0.00001
+   -formula CH2O 0.0
+   -parms  0.01  2.8e-4  1e-3 #parm(1)=pep, parm(2)=mr, parm(3)=rEP
+
+EM
+   -m0   0.00001
+   -formula CH2O 0.0
+   -parms  0.01 2.8e-4 1e-3 #parm(1)=pem, parm(2)=mr, parm(3)=rEM
+
+respiration
+   -m0   0
+   -formula CH2O 0.0
+
+Tot
+   -m0   17.00003
+   -formula CH2O 0.0
+   -parms  4e-5  8e-5  8e-5 
+
+   -steps 8760 in 8760 steps #hour
+  INCREMENTAL_REACTIONS true
+
+
+RATES
+
+POM1
+   -start
+    10 mDOM= kin("DOM")
+    20 bio = kin("BA")
+    30 mPOM1 = kin("POM1")
+    40 ep1 = kin("EP1")
+    50 uptake = 1/parm(1) * (parm(2)+parm(3)) * mDOM * bio/(parm(4)+mDOM) 
+    60 put (uptake, 1)
+    70 flux = parm(5) * ep1 * mPOM1 /(parm(6)+ mPOM1) # parm(1)=Vp1, parm(2)=Kp1
+    80 put(flux, 2)  #flux FP1
+    90 rate = parm(7)+ (1-parm(8))*get(7)-get(2)   
+    100 save -rate * time
+   -end
+
+POM2
+   -start
+    10 mPOM2= kin("POM2")
+    20 ep2 = kin("EP2")
+    30 flux = parm(1) * ep2 * mPOM2 /(parm(2)+ mPOM2) # parm(1)=Vp2, parm(2)=Kp2
+    40 put(flux, 3)  #flux FP2
+    50 rate = parm(3)-get(3)   #parm(3)=POM2 input
+    100 save -rate * time
+   -end
+
+
+MOM
+   -start
+    10 mMOM = kin("MOM")
+    20 em = kin("EM")
+    30 flux = parm(1) * em * mMOM /(parm(2)+ mMOM) # parm(1)=VM, parm(2)=KM
+    40 put(flux,4)  #flux FM
+    50 rate = (1-parm(3))*(get(2)+get(3))-get(4)   #parm(3)=fD_fraction of decomposed P1/P2 to D
+    100 save -rate*time
+   -end
+BA
+   -start
+    10 mDOM= kin("DOM")
+    20 bio = kin("BA")
+    30 flux1=(1/parm(1)-1)*parm(2)*bio*mDOM/(parm(3)+mDOM)   #parm(1)=Yg, parm(2)=Vd, parm(3)=Kd
+    40 put(flux1, 5)                                       ##growth respiration
+    50 flux2=(1/parm(1)-1)*parm(4)*bio*mDOM/(parm(3)+mDOM)      #parm(1)=Yg, parm(4)=mr, parm(3)=Kd
+    60 put(flux2, 6)                                           ##maintenance respiration
+    70 flux3 = (1-parm(5)*3)*parm(4)*bio 
+    80 put(flux3, 7)                                             ##mortality
+    90 rate = get(1)-get(5)-get(6)-get(7)-get(10)-get(12)-get(14)
+    100 save -rate * time 
+   -end
+DOM
+   -start
+    10 rate = parm(1)+(1-parm(2))*(get(2)+get(3))+parm(3)* get(7)+get(4)+get(11)+get(13)+get(15)-(get(8)-get(9))-get(1)
+    100 save -rate* time
+   -end
+QOM
+   -start
+    10 mQOM = kin("QOM")
+    20 D = kin("DOM")
+    30 flux1 = parm(1) * (1-mQOM/parm(2))* D #parm(1)=adsorption constant, parm(2)=Qmax
+    40 put(flux1,8)  #flux F4
+    50 flux2 = parm(3) * (mQOM/parm(2)) #parm(3)=desorption constant, parm(2)=Qmax
+    60 put(flux2,9)  #flux F5
+    70 rate = get(8)-get(9)
+    100 save -rate * time
+   -end
+
+EP1
+   -start
+
+    10 p1 = kin("POM1")
+    20 p2 = kin ("POM2")
+    30 bio = kin("BA")
+    40 ep1 = kin("EP1")
+    50 flux1 = p1/(p1+p2)*parm(1)*parm(2)*bio
+    60 put (flux1,10)
+    70 flux2 = parm(3) *ep1
+    80 put (flux2,11)
+    90 rate = get(10)-get(11)
+    100 save -rate * time
+   -end
+
+
+EP2
+   -start
+    10 p1 = kin("POM1")
+    20 p2 = kin ("POM2")
+    30 bio = kin("BA")
+    40 ep2 = kin("EP2")
+    50 flux1 = p2/(p1+p2)*parm(1)*parm(2)*bio
+    60 put (flux1,12)
+    70 flux2 = parm(3) *ep2
+    80 put (flux2,13)
+    90 rate = get(12)-get(13)
+    100  save -rate * time
+   -end
+
+EM
+   -start
+    10 em = kin("EM")
+    20 bio = kin("BA")
+    30 flux1 = parm(1)*parm(2)*bio
+    40 put (flux1, 14)
+    50 flux2= parm(3)* em
+    60 put (flux2,15)
+    70 rate = get(14)-get(15)
+    100  save -rate * time
+   -end
+
+respiration
+   -start
+    10 rate = get(5)+get(6)
+    20 save -rate * time
+   -end
+Tot
+   -start
+    10 rate = parm(1)+parm(2)+parm(3)-(get(5)+get(6))
+    20 save -rate * time
+   -end
+
+
+SELECTED_OUTPUT
+  -RESET false
+  -FILE chemMENDout.txt
+
+USER_PUNCH
+  -start
+  -heading Time(day) POM1 POM2 MOM QOM DOM BA EP1 EP2 EM CO2 Total
+  10 PUNCH SIM_TIME
+  20 PUNCH kin('POM1') kin('POM2') kin('MOM') kin('QOM') kin('DOM') kin('BA') kin('EP1') kin('EP2') kin('EM')
+  30 PUNCH kin('respiration') kin("Tot")
+  
+  -end
+END
+  
